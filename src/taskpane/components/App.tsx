@@ -77,11 +77,19 @@ const App = () => {
         const worksheets = [];
 
         for (var worksheet of sheets.items) {
-          const sheet = context.workbook.worksheets.getActiveWorksheet();
           resetProcessedRows();
           incrementWorksheet();
 
-          const range = sheet.getUsedRange();
+          const usedRange = worksheet.getUsedRange();
+          usedRange.load();
+          const usedRow = usedRange.getLastRow();
+          const usedCol = usedRange.getLastColumn();
+
+          usedRow.load("rowIndex");
+          usedCol.load("columnIndex");
+          await context.sync();
+
+          const range = worksheet.getRangeByIndexes(0, 0, usedRow.rowIndex + 1, usedCol.columnIndex);
           range.load([
             "values",
             "formulas",
