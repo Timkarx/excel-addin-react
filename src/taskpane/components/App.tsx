@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Input, Label, useId, makeStyles, Button, Textarea, Spinner } from "@fluentui/react-components";
-import { getCellAddress } from "../taskpane";
+import { getCellAddress, mapRowsToCells } from "../taskpane";
 import { useState } from "react";
 
 const useStyles = makeStyles({
@@ -65,96 +65,50 @@ const App = () => {
     setProcessedRows(0);
   };
 
-  const readWorkbook = async () => {
+const readWorkbook = async () => {
     resetProgress();
+    
+    console.time('Total time'); // Start total time measurement
 
     try {
-      const workbook = await Excel.run(async (context) => {
-        var sheets = context.workbook.worksheets;
-        sheets.load("items");
-        await context.sync();
+        const workbook = await Excel.run(async (context) => {
+            var sheets = context.workbook.worksheets;
+            sheets.load("items");
+            const sheetCount = sheets.getCount()
+            await context.sync();
+            console.log("Number of sheets", sheetCount.value)
 
-        const worksheets = [];
+            const worksheets = [];
 
-        for (var worksheet of sheets.items) {
-          resetProcessedRows();
-          incrementWorksheet();
+            for (var worksheet of sheets.items) {
+                console.log(`Processing sheet "${worksheet.name}"`)
+                console.time(`Worksheet "${worksheet.name}" processing time`); // Start timing each worksheet
 
-          const usedRange = worksheet.getUsedRange();
-          usedRange.load();
-          const usedRow = usedRange.getLastRow();
-          const usedCol = usedRange.getLastColumn();
+                const range = worksheet.getUsedRange();
+                range.load("values")
+                range.load("address")
+                await context.sync();
 
-          usedRow.load("rowIndex");
-          usedCol.load("columnIndex");
-          await context.sync();
-
-          const range = worksheet.getRangeByIndexes(0, 0, usedRow.rowIndex + 1, usedCol.columnIndex);
-          range.load([
-            "values",
-            "formulas",
-            "formulasR1C1",
-            "address",
-            "numberFormat",
-            "format/font",
-            "rowCount",
-            "columnCount",
-          ]);
-
-          await context.sync();
-
-          const addresses = range.address.split(":")[0].split("!")[1]; // Get starting address
-          const baseColumn = addresses.replace(/[0-9]/g, "");
-          const baseRow = parseInt(addresses.replace(/[^0-9]/g, ""));
-          const worksheetData = {
-            name: worksheet.name,
-            cells: {},
-          };
-          setWorksheetRows(range.rowCount);
-          for (let row = 0; row < range.rowCount; row++) {
-            incrementProcessedRows();
-            for (let col = 0; col < range.columnCount; col++) {
-              const cellAddress = getCellAddress(baseColumn, baseRow, row, col);
-              const cellFont = range.getCell(row, col).format.font;
-              const cellFill = range.getCell(row, col).format.fill;
-              cellFont.load(["bold", "color", "italic", "name", "size", "underline", "backgroundColor"]);
-              cellFill.load(["color"]);
-              await context.sync();
-
-              const cellData = {
-                value: range.values[row][col],
-                formula: range.formulas[row][col],
-                formulaR1C1: range.formulasR1C1[row][col],
-                address: cellAddress,
-                rowIndex: row,
-                columnIndex: col,
-                numberFormat: range.numberFormat[row][col],
-                backgroundColor: cellFill.color,
-                format: {
-                  font: {
-                    name: cellFont.name,
-                    size: cellFont.size,
-                    bold: cellFont.bold,
-                    italic: cellFont.italic,
-                    underline: cellFont.underline,
-                    color: cellFont.color,
-                  },
-                },
-              };
-              worksheetData.cells[cellAddress] = cellData;
+                const rawValsByRow = range.values
+                const addressRange = range.address
+                const worksheetData = mapRowsToCells(addressRange, rawValsByRow, worksheet.name)
+                console.log(`Worksheet ${worksheet.name} data: `, worksheetData)
+                worksheets.push(worksheetData);
+                console.timeEnd(`Worksheet "${worksheet.name}" processing time`); // End timing for each worksheet
             }
-          }
-          worksheets.push(worksheetData);
-        }
-        console.log(worksheets);
-        return worksheets;
-      });
-      return workbook;
+
+            console.timeEnd('Total time'); // End total time measurement
+
+            console.log(worksheets);
+            return worksheets;
+        });
+        return workbook;
     } catch (error) {
-      setReadErrorMessage(error.message);
-      throw error;
+        setReadErrorMessage(error.message);
+        console.error(error)
+        throw error;
     }
-  };
+};
 
   const handleSubmitRead = async (e: React.FormEvent<HTMLFormElement>) => {
     setIsReadLoading(true);
@@ -278,7 +232,7 @@ const App = () => {
               <Input required id={inputId2} name="param_2" />
             </div>
           </div>
-          <Button type="submit" appearance="primary" disabled={isReadLoading}>
+          <Button type="submit" appearance="outline" disabled={isReadLoading}>
             {isReadLoading ? (
               <span>
                 &nbsp;{sheetPercent}%&nbsp;of&nbsp;sheet&nbsp;{currentWorksheet}
@@ -287,6 +241,7 @@ const App = () => {
               "Run"
             )}
           </Button>
+          <span className="">Hello TaskPane!</span>
           <span className="">{readErrorMessage}</span>
         </div>
       </form>

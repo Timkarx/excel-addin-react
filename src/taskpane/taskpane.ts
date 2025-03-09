@@ -44,3 +44,23 @@ export async function insertText(text: string) {
     console.log("Error: " + error);
   }
 }
+
+export function mapRowsToCells(adressRange: string, vals: Array<Array<any>>, worksheetName: string) {
+    const startCell = adressRange.split(":")[0].split("!")[1]; // Get starting address
+    const baseColumn = startCell.replace(/[0-9]/g, "");
+    const baseRow = parseInt(startCell.replace(/[^0-9]/g, ""));
+
+    const worksheetData = {
+        name: worksheetName,
+        cells: {},
+    };
+    for (let row = 0; row < vals.length; row++) {
+       for (let col = 0; col < vals[row].length; col++) {
+           const data = vals[row][col]
+           const cellAddress = getCellAddress(baseColumn, baseRow, row, col)
+           worksheetData.cells[cellAddress] = data  
+
+       } 
+    }
+    return worksheetData
+}
