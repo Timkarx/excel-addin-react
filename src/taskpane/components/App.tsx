@@ -65,9 +65,8 @@ const App = () => {
     setProcessedRows(0);
   };
 
-const readWorkbook = async () => {
+const readWorkbook = async (targetUrl: string): Promise<void> => {
     resetProgress();
-    
     console.time('Total time'); // Start total time measurement
 
     try {
@@ -78,29 +77,31 @@ const readWorkbook = async () => {
             await context.sync();
             console.log("Number of sheets", sheetCount.value)
 
-            const worksheets = [];
-
             for (var worksheet of sheets.items) {
                 console.log(`Processing sheet "${worksheet.name}"`)
                 console.time(`Worksheet "${worksheet.name}" processing time`); // Start timing each worksheet
 
                 const range = worksheet.getUsedRange();
+                // const cellFormat = range.getCellProperties({address: true, format: {font: {color: true}}})
                 range.load("values")
                 range.load("address")
                 await context.sync();
 
                 const rawValsByRow = range.values
                 const addressRange = range.address
-                const worksheetData = mapRowsToCells(addressRange, rawValsByRow, worksheet.name)
-                console.log(`Worksheet ${worksheet.name} data: `, worksheetData)
-                worksheets.push(worksheetData);
+                const worksheetData = mapRowsToCells(addressRange, worksheet.name, rawValsByRow)
+
+                await fetch(targetUrl as string, {
+                  method: "POST",
+                  body: JSON.stringify({
+                    worksheet: worksheetData
+                  }),
+                  mode: "no-cors"
+                });
                 console.timeEnd(`Worksheet "${worksheet.name}" processing time`); // End timing for each worksheet
             }
 
             console.timeEnd('Total time'); // End total time measurement
-
-            console.log(worksheets);
-            return worksheets;
         });
         return workbook;
     } catch (error) {
@@ -110,6 +111,25 @@ const readWorkbook = async () => {
     }
 };
 
+const submitCheck = async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault() 
+  const formData = new FormData(e.currentTarget);
+  const sheetName = formData.get("sheetName") as string
+  try {
+    const workbook = await Excel.run(async (context) => {
+      var sheets = context.workbook.worksheets;
+      const queriedSheet = sheets.getItem(sheetName)
+      await context.sync();
+      const range = queriedSheet.getUsedRange()
+      range.load("address")
+      await context.sync()
+      console.log("Used range for queried sheet: ", range.address)
+    })
+  } catch (error) {
+    
+  }
+}
+
   const handleSubmitRead = async (e: React.FormEvent<HTMLFormElement>) => {
     setIsReadLoading(true);
     setReadErrorMessage("");
@@ -117,17 +137,9 @@ const readWorkbook = async () => {
     const formData = new FormData(e.currentTarget);
     const param1 = formData.get("param_1");
     const param2 = formData.get("param_2");
-    const targetUrl = formData.get("targetUrl");
+    const targetUrl = formData.get("targetUrl") as string
 
-    const workbook = await readWorkbook();
-
-    await fetch(targetUrl as string, {
-      method: "POST",
-      body: JSON.stringify({
-        worksheets: workbook,
-        params: { param1, param2 },
-      }),
-    });
+    await readWorkbook(targetUrl)
     setIsReadLoading(false);
   };
 
@@ -244,6 +256,12 @@ const readWorkbook = async () => {
           <span className="">Hello TaskPane!</span>
           <span className="">{readErrorMessage}</span>
         </div>
+      </form>
+      <form onSubmit={submitCheck}>
+        <Input required name="sheetName" />
+        <Button type="submit" appearance="outline" disabled={isReadLoading}>
+           Check Sheet      
+        </Button>
       </form>
       <form className={styles.form} onSubmit={handleSubmitWrite}>
         <div className={styles.inputWrapper}>

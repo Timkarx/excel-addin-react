@@ -45,7 +45,8 @@ export async function insertText(text: string) {
   }
 }
 
-export function mapRowsToCells(adressRange: string, vals: Array<Array<any>>, worksheetName: string) {
+export function mapRowsToCells(adressRange: string, worksheetName: string, vals: Array<Array<any>>) {
+    const refArray = vals
     const startCell = adressRange.split(":")[0].split("!")[1]; // Get starting address
     const baseColumn = startCell.replace(/[0-9]/g, "");
     const baseRow = parseInt(startCell.replace(/[^0-9]/g, ""));
@@ -54,11 +55,11 @@ export function mapRowsToCells(adressRange: string, vals: Array<Array<any>>, wor
         name: worksheetName,
         cells: {},
     };
-    for (let row = 0; row < vals.length; row++) {
-       for (let col = 0; col < vals[row].length; col++) {
-           const data = vals[row][col]
+    for (let row = 0; row < refArray.length; row++) {
+       for (let col = 0; col < refArray[row].length; col++) {
+           const cellData = vals[row][col]
            const cellAddress = getCellAddress(baseColumn, baseRow, row, col)
-           worksheetData.cells[cellAddress] = data  
+           worksheetData.cells[cellAddress] = cellData
 
        } 
     }
